@@ -164,12 +164,7 @@ def get_formatted_chat_history(chat_history):
     """Format chat history for better context retention"""
     formatted_history = ""
     
-    # Debug information to help diagnose issues
-    if chat_history:
-        st.write(f"Debug - Chat history type: {type(chat_history)}")
-        st.write(f"Debug - First message type: {type(chat_history[0])}")
-    
-    for i, exchange in enumerate(chat_history[-6:]):  # Only use the most recent 6 messages
+    for exchange in enumerate(chat_history[-6:]):  # Only use the most recent 6 messages
         # Handle different formats of chat history
         if hasattr(exchange, 'type') and hasattr(exchange, 'content'):
             # Handle LangChain message objects
@@ -213,7 +208,7 @@ def create_conversation_chain(vectorstore):
         combine_docs_chain_kwargs={"prompt": PROMPT},
         return_source_documents=True,  # Helpful for debugging
         get_chat_history=get_formatted_chat_history,
-        verbose=True  # Helpful for debugging
+        verbose=False
     )
     
     return conversation_chain
@@ -240,7 +235,7 @@ def main():
                     st.session_state.gemini_api_key = api_key
                     st.success("API key configured successfully!")
                 except Exception as e:
-                    st.error(f"Error configuring API key: {e}")
+                    st.error(f"Error configuring API key: {str(e)}")
         else:
             st.success("API key is configured.")
             if st.button("Reset API Key"):
@@ -261,9 +256,9 @@ def main():
                         st.session_state.pdf_processed = True
                         st.success("PDF processed successfully!")
                     except Exception as e:
-                        st.error(f"Error processing PDF: {e}")
+                        st.error(f"Error processing PDF: {str(e)}")
         
-        # Debug information
+        # Conversation stats and reset button
         if st.session_state.pdf_processed:
             st.subheader("Conversation Stats")
             st.text(f"Approx. token count: {st.session_state.token_count}")
@@ -275,10 +270,6 @@ def main():
                     st.session_state.conversation_chain.memory.clear()
                 st.session_state.token_count = 0
                 st.rerun()
-        
-        # Add debug switch
-        with st.expander("Debug Options"):
-            debug_mode = st.checkbox("Enable Debug Mode", value=False)
         
         # Information section
         st.subheader("About")
@@ -345,10 +336,8 @@ def main():
                                 {"question": enhanced_question}, 
                                 {"answer": answer}
                             )
-                except Exception as e:
-                    answer = f"I apologize, but I encountered an error while processing your question. Please try rephrasing or asking a different question. If the problem persists, you may need to reset the conversation."
-                    if debug_mode:
-                        answer += f"\n\nError details (debug mode): {str(e)}"
+                except Exception:
+                    answer = "I apologize, but I encountered an error while processing your question. Please try rephrasing or asking a different question. If the problem persists, you may need to reset the conversation."
             
             # Display assistant response
             st.markdown(f"""<div class="neurosurgeon"><p>{answer}</p></div>""", unsafe_allow_html=True)
