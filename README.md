@@ -1,19 +1,21 @@
-# 💬 Chatbot template
+# 💬 Social Media Post Generator
 
-A simple Streamlit app that shows how to build a chatbot using OpenAI's GPT-3.5.
+A simple Streamlit app that geenerates social media post using Gemini. 
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://chatbot-template.streamlit.app/)
 
-### How to run it on your own machine
+Install the requirements
+$ pip install -r requirements.txt
+$ streamlit run streamlit_app.py
 
-1. Install the requirements
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+🚀 How to Run It Locally
 
-2. Run the app
+Install Dependencies Make sure you have Python installed, then install the required packages: pip install -r requirements.txt
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+Run the App using this link: https://postgenerator-anvredghqyh5ulfqxqq562.streamlit.app/
+
+🏥 Features of Social Media Post Generator: Uses Gemini API key. Creates post for social media (LinkedIn or Twitter/X). Input a prompt and the app will generate text for a social media post. User can either copy it and use it or ask the app to improve it so that it will modify the content and come up with a better post. 
+
+🔑 Usage Enter your Gemini API Key when prompted. API_key: "AIzaSyBsxEaf_KqrI9BEwtPJXXhNfwmz69kFMsA"
+
+Receive an AI-generated response based on the Gemini API.
