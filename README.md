@@ -24,4 +24,4 @@ Guardrails: Moderates content and filters inappropriate content using a predefin
 
 🔑 Usage Enter your Gemini API Key when prompted. API_key: "AIzaSyAhUHN6XnEYeNx9g8QqsKKWKjtrc1tSnRA"
 
-Receive an AI-generated response based on the Gemini API.
+Receive an AI-generated response based on the Gemini and Pollinations.
