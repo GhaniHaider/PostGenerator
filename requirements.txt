@@ -1,5 +1,6 @@
-streamlit
-google-generativeai
-pillow
-requests
-python-dotenv 
+streamlit>=1.29.0
+google-generativeai>=0.7.0
+Pillow>=9.0.0
+requests>=2.28.0
+uuid>=1.30
+python-dotenv>=1.0.0
