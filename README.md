@@ -22,6 +22,6 @@ User can either copy it and use it or ask the app to improve it so that it will 
 Guardrails: Moderates content and filters inappropriate content using a predefined list of words. 
 [workinig on calling function to post directly on selected social meadia platform]
 
-🔑 Usage Enter your Gemini API Key when prompted. API_key: "AIzaSyBsxEaf_KqrI9BEwtPJXXhNfwmz69kFMsA"
+🔑 Usage Enter your Gemini API Key when prompted. API_key: "AIzaSyAhUHN6XnEYeNx9g8QqsKKWKjtrc1tSnRA"
 
 Receive an AI-generated response based on the Gemini API.
