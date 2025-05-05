@@ -20,7 +20,7 @@ Input a prompt and the app will generate text for a social media post.
 Can optionally attach an image file or provide prompt to generate an image using AI (pollinations.ai) or can select 'no image'
 User can either copy it and use it or ask the app to improve it so that it will modify the content and come up with a better post. 
 Guardrails: Moderates content and filters inappropriate content using a predefined list of words. 
-[workinig on calling function to post directly on selected social meadia platform]
+[workinig on calling function to post directly on selected social media platform]
 
 🔑 Usage Enter your Gemini API Key when prompted. API_key: "AIzaSyAhUHN6XnEYeNx9g8QqsKKWKjtrc1tSnRA"
 
