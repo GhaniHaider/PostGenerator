@@ -406,7 +406,7 @@ with st.sidebar.expander("Troubleshooting Tips", expanded=False):
        ```
        pip install --upgrade google-generativeai
        ```
-    4. Ensure you have an active internet connection
+    4. Ensure you have an active internet connection.
     5. If using images, make sure they're in a supported format (PNG, JPG, JPEG)
     6. If image generation fails, try a more descriptive prompt or simplify your request
     """)
