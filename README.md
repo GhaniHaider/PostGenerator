@@ -14,10 +14,13 @@ Install Dependencies Make sure you have Python installed, then install the requi
 
 Run the App using this link: https://postgenerator-anvredghqyh5ulfqxqq562.streamlit.app/
 
-🏥 Features of Social Media Post Generator: Uses Gemini API key. Creates post for social media (LinkedIn or Twitter/X). 
+🏥 Features of Social Media Post Generator: 
+Uses Gemini API key. Creates post for social media (LinkedIn or Twitter/X). 
 Input a prompt and the app will generate text for a social media post. 
+Can optionally attach an image file. [Working on using text to image generation]
 User can either copy it and use it or ask the app to improve it so that it will modify the content and come up with a better post. 
 Guardrails: Moderates content and filters inappropriate content using a predefined list of words. 
+[workinig on calling function to post directly on selected social meadia platform]
 
 🔑 Usage Enter your Gemini API Key when prompted. API_key: "AIzaSyBsxEaf_KqrI9BEwtPJXXhNfwmz69kFMsA"
 
