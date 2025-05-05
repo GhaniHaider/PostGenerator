@@ -98,15 +98,31 @@ def generate_image_with_pollinations(prompt):
         # This constructs a URL that will generate an image on-the-fly
         image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}%20{seed}?width=1024&height=1024&nologo=true"
         
-        # Test if the URL is accessible
-        response = requests.head(image_url)
-        if response.status_code == 200:
-            return image_url, None
-        else:
-            return None, f"Error: Unable to generate image (Status code: {response.status_code})"
+        # Return the URL only - we'll download it when needed
+        return image_url, None
     
     except Exception as e:
-        return None, f"Error generating image: {str(e)}"
+        return None, f"Error generating image URL: {str(e)}"
+
+# Function to download and process the generated image
+def download_image(url):
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        
+        # Process the image
+        image = Image.open(io.BytesIO(response.content))
+        
+        # Convert to bytes for Gemini API
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        image_bytes = buffer.getvalue()
+        
+        return image, image_bytes
+    except requests.exceptions.RequestException as e:
+        return None, None, f"Error downloading image: {str(e)}"
+    except Exception as e:
+        return None, None, f"Error processing image: {str(e)}"
 
 # Function to generate post content with improved error handling
 def generate_post(prompt, platform, image_bytes=None, is_refinement=False, original_content=None):
@@ -215,7 +231,7 @@ if image_option == "Upload your own image":
     if uploaded_file is not None:
         display_image, image_bytes = process_image(uploaded_file)
         if display_image:
-            st.image(display_image, caption="Preview of uploaded image", use_column_width=True)
+            st.image(display_image, caption="Preview of uploaded image", use_container_width=True)
 elif image_option == "Generate an image with AI":
     image_prompt = st.text_area("Describe the image you want to generate", 
                                placeholder="E.g., A professional workspace with a laptop, coffee cup, and notebook")
@@ -224,15 +240,23 @@ elif image_option == "Generate an image with AI":
             image_url, error = generate_image_with_pollinations(image_prompt)
             if image_url:
                 st.session_state.generated_image_url = image_url
-                st.image(image_url, caption="Generated image preview", use_column_width=True)
-                # Download the image for use with Gemini API
+                
+                # Add a delay to allow image to be generated
+                time.sleep(2)
+                
                 try:
+                    # Download and display the image
                     response = requests.get(image_url)
                     if response.status_code == 200:
+                        # Save the image bytes
                         image_bytes = response.content
-                        display_image = Image.open(io.BytesIO(image_bytes))
+                        
+                        # Display the image
+                        st.image(image_url, caption="Generated image preview", use_container_width=True)
                 except Exception as e:
-                    st.error(f"Error downloading generated image: {str(e)}")
+                    st.error(f"Error downloading image: {str(e)}")
+                    st.warning("Showing image URL instead. Click to view:")
+                    st.markdown(f"[View generated image]({image_url})")
             else:
                 st.error(f"Failed to generate image: {error}")
 
@@ -245,14 +269,16 @@ if st.button("Generate Post") and prompt:
                 image_url, error = generate_image_with_pollinations(image_prompt)
                 if image_url:
                     st.session_state.generated_image_url = image_url
-                    # Download the image for use with Gemini API
+                    # Add a delay to allow image to be generated
+                    time.sleep(2)
+                    
                     try:
+                        # Download and use the image
                         response = requests.get(image_url)
                         if response.status_code == 200:
                             image_bytes = response.content
-                            display_image = Image.open(io.BytesIO(image_bytes))
                     except Exception as e:
-                        st.error(f"Error downloading generated image: {str(e)}")
+                        st.error(f"Error downloading image: {str(e)}")
                 else:
                     st.error(f"Failed to generate image: {error}")
         
@@ -278,9 +304,9 @@ if st.session_state.generated_post:
             col1, col2 = st.columns([1, 2])
             with col1:
                 if display_image:
-                    st.image(display_image, caption="Post image", use_column_width=True)
+                    st.image(display_image, caption="Post image", use_container_width=True)
                 elif st.session_state.generated_image_url:
-                    st.image(st.session_state.generated_image_url, caption="Generated image", use_column_width=True)
+                    st.image(st.session_state.generated_image_url, caption="Generated image", use_container_width=True)
             with col2:
                 st.markdown("#### Post Text:")
                 st.write(st.session_state.generated_post)
@@ -341,7 +367,7 @@ st.sidebar.info("This app uses Google's Gemini 1.5 Pro API to generate social me
 
 # Version indicator to confirm updates are working
 st.sidebar.markdown("---")
-st.sidebar.text("App Version: 2.0 (No API key for images)")
+st.sidebar.text("App Version: 2.1 (Fixed image generation)")
 
 # Troubleshooting tips
 with st.sidebar.expander("Troubleshooting Tips", expanded=False):
@@ -357,6 +383,7 @@ with st.sidebar.expander("Troubleshooting Tips", expanded=False):
     4. Ensure you have an active internet connection
     5. If using images, make sure they're in a supported format (PNG, JPG, JPEG)
     6. If image generation fails, try a more descriptive prompt or simplify your request
+    7. If image display fails, you can click the provided link to view the image directly
     """)
 
 # Add a clear cache button to help with updates
