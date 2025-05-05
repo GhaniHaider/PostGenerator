@@ -8,17 +8,16 @@ import io
 import requests
 import json
 import time
+import uuid
 
 # App title and description
 st.title("Social Media Post Generator")
 st.markdown("Generate engaging content & images for LinkedIn and Twitter/X.")
 
-# Configure API keys with improved error handling
+# Configure API key with improved error handling
 with st.sidebar:
     st.subheader("API Configuration")
     gemini_api_key = st.text_input("Enter your Gemini API Key", type="password")
-    pollinations_api_key = st.text_input("Enter your Pollinations API Key", type="password", 
-                                      help="Get a key at https://pollinations.ai")
 
 # Set default model to Gemini 1.5 Pro
 DEFAULT_MODEL = "gemini-1.5-pro"
@@ -88,78 +87,26 @@ def process_image(uploaded_file):
         return image, image_bytes
     return None, None
 
-# Function to generate image using Pollinations.ai
+# Function to generate image using Pollinations.ai (no API key required)
 def generate_image_with_pollinations(prompt):
-    if not pollinations_api_key:
-        return None, "Pollinations API key is required for image generation"
-    
     try:
-        # Create image generation request
-        url = "https://api.pollinations.ai/v1/images/generations"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {pollinations_api_key}"
-        }
+        # Create a safe name for the model seed
+        safe_prompt = prompt.replace(" ", "-")[:30]
+        seed = str(uuid.uuid4())[:8]
         
-        data = {
-            "prompt": prompt,
-            "n": 1,  # Generate 1 image
-            "size": "1024x1024",
-            "response_format": "url"
-        }
+        # Use Pollinations public API endpoint (no auth needed)
+        # This constructs a URL that will generate an image on-the-fly
+        image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}%20{seed}?width=1024&height=1024&nologo=true"
         
-        # Send request
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        
-        # Check if request was successful
+        # Test if the URL is accessible
+        response = requests.head(image_url)
         if response.status_code == 200:
-            result = response.json()
-            # The response structure may vary based on Pollinations API
-            image_url = result.get("data", [{}])[0].get("url")
             return image_url, None
-        elif response.status_code == 202:
-            # If the request is accepted but processing
-            job_id = response.json().get("id")
-            # Poll for results
-            return poll_for_image_completion(job_id, pollinations_api_key)
         else:
-            return None, f"Error: {response.status_code} - {response.text}"
+            return None, f"Error: Unable to generate image (Status code: {response.status_code})"
     
     except Exception as e:
         return None, f"Error generating image: {str(e)}"
-
-# Function to poll for image completion
-def poll_for_image_completion(job_id, api_key):
-    max_attempts = 30
-    attempt = 0
-    poll_interval = 2  # seconds
-    
-    while attempt < max_attempts:
-        try:
-            url = f"https://api.pollinations.ai/v1/images/generations/{job_id}"
-            headers = {"Authorization": f"Bearer {api_key}"}
-            
-            response = requests.get(url, headers=headers)
-            result = response.json()
-            
-            if response.status_code == 200:
-                status = result.get("status")
-                
-                if status == "completed":
-                    # Get the URL from the response
-                    image_url = result.get("data", [{}])[0].get("url")
-                    return image_url, None
-                elif status in ["failed", "error"]:
-                    return None, f"Image generation failed: {result.get('error', 'Unknown error')}"
-            
-            # Wait before next polling attempt
-            time.sleep(poll_interval)
-            attempt += 1
-            
-        except Exception as e:
-            return None, f"Error polling for image completion: {str(e)}"
-    
-    return None, "Image generation timed out. Please try again."
 
 # Function to generate post content with improved error handling
 def generate_post(prompt, platform, image_bytes=None, is_refinement=False, original_content=None):
@@ -270,27 +217,24 @@ if image_option == "Upload your own image":
         if display_image:
             st.image(display_image, caption="Preview of uploaded image", use_column_width=True)
 elif image_option == "Generate an image with AI":
-    if not pollinations_api_key:
-        st.warning("Please enter your Pollinations API key in the sidebar to generate images.")
-    else:
-        image_prompt = st.text_area("Describe the image you want to generate", 
-                                      placeholder="E.g., A professional workspace with a laptop, coffee cup, and notebook")
-        if st.button("Preview Image") and image_prompt:
-            with st.spinner("Generating image preview..."):
-                image_url, error = generate_image_with_pollinations(image_prompt)
-                if image_url:
-                    st.session_state.generated_image_url = image_url
-                    st.image(image_url, caption="Generated image preview", use_column_width=True)
-                    # Download the image for use with Gemini API
-                    try:
-                        response = requests.get(image_url)
-                        if response.status_code == 200:
-                            image_bytes = response.content
-                            display_image = Image.open(io.BytesIO(image_bytes))
-                    except Exception as e:
-                        st.error(f"Error downloading generated image: {str(e)}")
-                else:
-                    st.error(f"Failed to generate image: {error}")
+    image_prompt = st.text_area("Describe the image you want to generate", 
+                               placeholder="E.g., A professional workspace with a laptop, coffee cup, and notebook")
+    if st.button("Preview Image") and image_prompt:
+        with st.spinner("Generating image preview..."):
+            image_url, error = generate_image_with_pollinations(image_prompt)
+            if image_url:
+                st.session_state.generated_image_url = image_url
+                st.image(image_url, caption="Generated image preview", use_column_width=True)
+                # Download the image for use with Gemini API
+                try:
+                    response = requests.get(image_url)
+                    if response.status_code == 200:
+                        image_bytes = response.content
+                        display_image = Image.open(io.BytesIO(image_bytes))
+                except Exception as e:
+                    st.error(f"Error downloading generated image: {str(e)}")
+            else:
+                st.error(f"Failed to generate image: {error}")
 
 # Generate button
 if st.button("Generate Post") and prompt:
@@ -380,13 +324,13 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.subheader("How to use")
 st.sidebar.markdown("""
-1. Enter your API Keys (Gemini required, Pollinations optional for image generation)
+1. Enter your Gemini API Key
 2. Select a platform (LinkedIn or Twitter/X)
 3. Type your post topic/idea 
 4. Choose an image option:
    - No image
    - Upload your own image
-   - Generate an AI image with Pollinations
+   - Generate an AI image
 5. Click 'Generate Post'
 6. Provide feedback to refine
 """)
@@ -395,18 +339,28 @@ st.sidebar.markdown("---")
 st.sidebar.info("This app uses Google's Gemini 1.5 Pro API to generate social media content and " 
                 "Pollinations.ai for image generation. Your content is checked for appropriateness before displaying.")
 
+# Version indicator to confirm updates are working
+st.sidebar.markdown("---")
+st.sidebar.text("App Version: 2.0 (No API key for images)")
+
 # Troubleshooting tips
 with st.sidebar.expander("Troubleshooting Tips", expanded=False):
     st.markdown("""
     **If you're getting API errors:**
     
-    1. Make sure you have valid API keys
-    2. Check that your Gemini API key has access to Gemini 1.5 Pro
+    1. Make sure you have a valid Gemini API key
+    2. Check that your API key has access to Gemini 1.5 Pro
     3. Try updating the google-generativeai package:
        ```
        pip install --upgrade google-generativeai
        ```
-    4. Ensure you have an active internet connection.
+    4. Ensure you have an active internet connection
     5. If using images, make sure they're in a supported format (PNG, JPG, JPEG)
     6. If image generation fails, try a more descriptive prompt or simplify your request
     """)
+
+# Add a clear cache button to help with updates
+if st.sidebar.button("Clear Cache and Reload"):
+    st.cache_data.clear()
+    st.session_state.clear()
+    st.rerun()
