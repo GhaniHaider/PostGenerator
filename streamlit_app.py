@@ -12,9 +12,6 @@ import uuid
 from datetime import datetime
 import traceback
 
-# Enable debugging
-st.set_option('deprecation.showfileUploaderEncoding', False)
-
 # App title and description
 st.title("Multi-Agent Social Media Post Generator")
 st.markdown("Generate engaging content & images with AI agents working together.")
@@ -610,6 +607,11 @@ with st.sidebar.expander("Troubleshooting Tips", expanded=True):
 
 # Add a clear cache button to help with updates
 if st.sidebar.button("Clear Cache and Reload"):
-    st.cache_data.clear()
+    try:
+        st.cache_data.clear()
+    except:
+        # For older versions of Streamlit
+        st.experimental_memo.clear()
+        st.experimental_singleton.clear()
     st.session_state.clear()
     st.rerun()
