@@ -9,18 +9,15 @@ import requests
 import json
 import time
 import uuid
-from datetime import datetime
-import traceback
 
 # App title and description
-st.title("Multi-Agent Social Media Post Generator")
-st.markdown("Generate engaging content & images with AI agents working together.")
+st.title("Social Media Post Generator")
+st.markdown("Generate engaging content & images for LinkedIn and Twitter/X.")
 
 # Configure API key with improved error handling
 with st.sidebar:
     st.subheader("API Configuration")
     gemini_api_key = st.text_input("Enter your Gemini API Key", type="password")
-    st.session_state['api_key_entered'] = bool(gemini_api_key)
 
 # Set default model to Gemini 1.5 Pro
 DEFAULT_MODEL = "gemini-1.5-pro"
@@ -28,8 +25,6 @@ DEFAULT_MODEL = "gemini-1.5-pro"
 # Initialize session state variables if they don't exist
 if 'generated_post' not in st.session_state:
     st.session_state.generated_post = ""
-if 'generated_image_prompt' not in st.session_state:
-    st.session_state.generated_image_prompt = ""
 if 'prompt_history' not in st.session_state:
     st.session_state.prompt_history = []
 if 'feedback_provided' not in st.session_state:
@@ -38,18 +33,7 @@ if 'original_post' not in st.session_state:
     st.session_state.original_post = ""
 if 'generated_image_url' not in st.session_state:
     st.session_state.generated_image_url = None
-if 'image_analysis' not in st.session_state:
-    st.session_state.image_analysis = None
-if 'agent_conversation' not in st.session_state:
-    st.session_state.agent_conversation = []
-if 'final_post' not in st.session_state:
-    st.session_state.final_post = ""
-if 'show_agent_convo' not in st.session_state:
-    st.session_state.show_agent_convo = False
-if 'debug_info' not in st.session_state:
-    st.session_state.debug_info = []
 
-# Improved API key handling
 if gemini_api_key:
     os.environ["GOOGLE_API_KEY"] = gemini_api_key
     genai.configure(api_key=gemini_api_key)
@@ -57,19 +41,14 @@ if gemini_api_key:
     # Direct debug output to help troubleshoot
     st.sidebar.subheader("API Connection Check")
     try:
-        # Test the API connection
-        model = genai.GenerativeModel(DEFAULT_MODEL)
-        test_response = model.generate_content("Hello")
-        st.sidebar.success(f"✅ Connected to Gemini API successfully")
-        st.sidebar.success(f"✅ Using model: {DEFAULT_MODEL}")
+        st.sidebar.info("Checking connection to Gemini API...")
+        st.sidebar.success(f"Using model: {DEFAULT_MODEL}")
     except Exception as e:
         st.sidebar.error(f"⚠️ Error connecting to Gemini API: {str(e)}")
         st.sidebar.warning("Please check your API key and internet connection.")
-        # Add detailed error to debug info
-        st.session_state.debug_info.append(f"API Error: {str(e)}")
-        st.session_state.debug_info.append(traceback.format_exc())
 else:
     st.sidebar.warning("Please enter your Gemini API Key to use this application.")
+    st.stop()
 
 # Define bad words list (this is a simplified list - expand as needed)
 BAD_WORDS = [
@@ -92,283 +71,43 @@ def contains_inappropriate_content(text):
 # Function to process the uploaded image
 def process_image(uploaded_file):
     if uploaded_file is not None:
-        try:
-            # Convert the file to an image
-            image = Image.open(uploaded_file)
-            
-            # For Gemini API, we need to prepare the image
-            # Resize if needed for API constraints
-            max_size = (1024, 1024)
-            image.thumbnail(max_size, Image.LANCZOS)
-            
-            # Convert to bytes
-            buffer = io.BytesIO()
-            image.save(buffer, format="PNG")
-            image_bytes = buffer.getvalue()
-            
-            return image, image_bytes
-        except Exception as e:
-            st.error(f"Error processing image: {str(e)}")
-            st.session_state.debug_info.append(f"Image Processing Error: {str(e)}")
-            st.session_state.debug_info.append(traceback.format_exc())
+        # Convert the file to an image
+        image = Image.open(uploaded_file)
+        
+        # For Gemini API, we need to prepare the image
+        # Resize if needed for API constraints
+        max_size = (1024, 1024)
+        image.thumbnail(max_size, Image.LANCZOS)
+        
+        # Convert to bytes
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        image_bytes = buffer.getvalue()
+        
+        return image, image_bytes
     return None, None
 
-# ================== TEXT AGENT FUNCTIONS ==================
-
-class TextGenerationAgent:
-    def __init__(self, model_name=DEFAULT_MODEL):
-        try:
-            self.model = genai.GenerativeModel(model_name)
-            self.name = "TextAgent"
-        except Exception as e:
-            st.error(f"Error initializing TextGenerationAgent: {str(e)}")
-            st.session_state.debug_info.append(f"TextGenerationAgent Init Error: {str(e)}")
-            st.session_state.debug_info.append(traceback.format_exc())
+# Function to generate image using Pollinations.ai (no API key required)
+def generate_image_with_pollinations(prompt):
+    try:
+        # Create a safe name for the model seed
+        safe_prompt = prompt.replace(" ", "-")[:30]
+        seed = str(uuid.uuid4())[:8]
         
-    def generate_initial_post(self, prompt, platform):
-        """Generate initial post based on user prompt"""
-        try:
-            full_prompt = (
-                f"Create a short, engaging {platform} post (less than 50 words) based on this prompt: '{prompt}'. "
-                f"Include relevant hashtags. Be creative and professional."
-            )
-            
-            st.session_state.debug_info.append(f"Sending prompt to TextAgent: {full_prompt[:100]}...")
-            
-            response = self.model.generate_content(full_prompt)
-            generated_text = response.text
-            
-            if contains_inappropriate_content(generated_text):
-                return "I couldn't generate appropriate content based on your prompt. Please try a different topic or wording."
-            
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Initial post generated: {generated_text}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            return generated_text
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"TextAgent Generate Post Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return f"Error generating content: {error_msg}"
-    
-    def extract_visual_elements(self, text):
-        """Extract key visual elements from generated text to guide image creation"""
-        try:
-            prompt = (
-                f"Analyze this social media post text and extract 3-5 key visual elements or concepts "
-                f"that would make for a compelling accompanying image. Format your response as a JSON array of strings. "
-                f"The post text is: '{text}'"
-            )
-            
-            response = self.model.generate_content(prompt)
-            result = response.text
-            
-            # Try to extract JSON if present
-            try:
-                # Find JSON array in the response
-                match = re.search(r'\[(.*?)\]', result.replace('\n', ''), re.DOTALL)
-                if match:
-                    json_str = match.group(0)
-                    visual_elements = json.loads(json_str)
-                else:
-                    # Fallback if JSON not found
-                    visual_elements = [text.split()[:3]]
-            except json.JSONDecodeError:
-                # If JSON parsing fails, extract keywords
-                visual_elements = result.split(',')[:5]
-            
-            # Format as a comma-separated list
-            if isinstance(visual_elements, list):
-                visual_elements_str = ", ".join(visual_elements)
-            else:
-                visual_elements_str = str(visual_elements)
-                
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Extracted visual elements: {visual_elements_str}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            return visual_elements_str
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"TextAgent Extract Elements Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return f"Error extracting visual elements: {error_msg}"
-    
-    def create_image_prompt(self, user_prompt, visual_elements):
-        """Create a detailed image prompt based on visual elements and user prompt"""
-        try:
-            prompt = (
-                f"Create a detailed image generation prompt based on these elements:\n"
-                f"1. User's original idea: '{user_prompt}'\n"
-                f"2. Key visual elements: {visual_elements}\n\n"
-                f"The prompt should be vivid, specific, and optimized for AI image generation. "
-                f"Include details about style, lighting, composition, and mood. "
-                f"Keep it under 100 words."
-            )
-            
-            response = self.model.generate_content(prompt)
-            image_prompt = response.text.strip()
-            
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Created image prompt: {image_prompt}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            return image_prompt
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"TextAgent Image Prompt Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return f"Error creating image prompt: {error_msg}"
-
-    def refine_post_with_image_feedback(self, original_post, image_analysis, platform):
-        """Refine the post based on image analysis feedback"""
-        try:
-            prompt = (
-                f"Refine this {platform} post to better match the image that was generated:\n\n"
-                f"Original post: '{original_post}'\n\n"
-                f"Image analysis: {image_analysis}\n\n"
-                f"Create an improved version that references specific elements from the image "
-                f"while maintaining the core message. Keep the post under 50 words "
-                f"and include relevant hashtags. Make it feel like a cohesive package with the image."
-            )
-            
-            response = self.model.generate_content(prompt)
-            refined_post = response.text.strip()
-            
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Refined post based on image feedback: {refined_post}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            return refined_post
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"TextAgent Refine Post Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return f"Error refining post: {error_msg}"
-
-# ================== IMAGE AGENT FUNCTIONS ==================
-
-class ImageGenerationAgent:
-    def __init__(self):
-        self.name = "ImageAgent"
-    
-    def generate_image(self, image_prompt):
-        """Generate image using Pollinations API based on the enhanced prompt"""
-        try:
-            # Create a safe name for the model seed
-            safe_prompt = image_prompt.replace(" ", "-")[:50]
-            seed = str(uuid.uuid4())[:8]
-            
-            # Use Pollinations public API endpoint (no auth needed)
-            image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}%20{seed}?width=1024&height=1024&nologo=true"
-            
-            # Test if the URL is accessible
-            test_response = requests.head(image_url)
-            test_response.raise_for_status()
-            
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Generated image using prompt: {image_prompt}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            return image_url, None
+        # Use Pollinations public API endpoint (no auth needed)
+        # This constructs a URL that will generate an image on-the-fly
+        image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}%20{seed}?width=1024&height=1024&nologo=true"
         
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"ImageAgent Generate Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return None, f"Error generating image: {error_msg}"
+        # Return the URL only - we'll download it when needed
+        return image_url, None
     
-    def analyze_generated_image(self, image_url, text_agent):
-        """Analyze the generated image and provide feedback"""
-        try:
-            # Since we can't analyze the image directly with Gemini without downloading it,
-            # we'll use the image generation prompt as a basis for simulated analysis
-            
-            prompt = (
-                f"Imagine you're analyzing an AI-generated image created with this prompt: '{st.session_state.generated_image_prompt}'\n\n"
-                f"Write a brief analysis of what the image likely contains and how well it might complement a social media post. "
-                f"Focus on visual elements, mood, colors, and composition. Keep it under 75 words."
-            )
-            
-            response = text_agent.model.generate_content(prompt)
-            analysis = response.text.strip()
-            
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Image analysis: {analysis}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            return analysis
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"ImageAgent Analysis Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return f"Error analyzing image: {error_msg}"
-
-# ================== COLLABORATION AGENT ==================
-
-class CollaborationAgent:
-    def __init__(self, model_name=DEFAULT_MODEL):
-        try:
-            self.model = genai.GenerativeModel(model_name)
-            self.name = "CollaborationAgent"
-        except Exception as e:
-            st.error(f"Error initializing CollaborationAgent: {str(e)}")
-            st.session_state.debug_info.append(f"CollaborationAgent Init Error: {str(e)}")
-            st.session_state.debug_info.append(traceback.format_exc())
-    
-    def finalize_content(self, original_prompt, post_text, image_prompt, image_analysis):
-        """Create a final recommendation based on all components"""
-        try:
-            prompt = (
-                f"Review and optimize this social media content package:\n\n"
-                f"Original user request: '{original_prompt}'\n\n"
-                f"Generated post: '{post_text}'\n\n"
-                f"Image prompt used: '{image_prompt}'\n\n"
-                f"Image analysis: {image_analysis}\n\n"
-                f"As a collaboration agent, suggest 1-2 minor tweaks to make the text and image work better together. "
-                f"Then provide a final recommendation for the post. Keep your response short and focused."
-            )
-            
-            response = self.model.generate_content(prompt)
-            recommendation = response.text.strip()
-            
-            # Add to agent conversation
-            message = {"agent": self.name, "message": f"Final recommendation: {recommendation}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            # Extract the recommended final post
-            # Look for the post text in the recommendation
-            post_pattern = r"(?:Final Post:|Recommended Post:|Here's the final post:|Finalized Post:)(.*?)(?:\n\n|$)"
-            match = re.search(post_pattern, recommendation, re.DOTALL | re.IGNORECASE)
-            
-            if match:
-                final_post = match.group(1).strip()
-            else:
-                # If no specific section found, use original post
-                final_post = post_text
-                
-            return recommendation, final_post
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.debug_info.append(f"CollaborationAgent Finalize Error: {error_msg}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            return f"Error finalizing content: {error_msg}", post_text
-
-# Helper function to get timestamp
-def get_timestamp():
-    return datetime.now().strftime("%H:%M:%S")
+    except Exception as e:
+        return None, f"Error generating image URL: {str(e)}"
 
 # Function to download and process the generated image
 def download_image(url):
     try:
-        response = requests.get(url, stream=True, timeout=10)
+        response = requests.get(url, stream=True)
         response.raise_for_status()  # Raise an exception for bad status codes
         
         # Process the image
@@ -379,15 +118,90 @@ def download_image(url):
         image.save(buffer, format="PNG")
         image_bytes = buffer.getvalue()
         
-        return image, image_bytes, None
+        return image, image_bytes
     except requests.exceptions.RequestException as e:
-        st.session_state.debug_info.append(f"Image Download Error: {str(e)}")
-        st.session_state.debug_info.append(traceback.format_exc())
         return None, None, f"Error downloading image: {str(e)}"
     except Exception as e:
-        st.session_state.debug_info.append(f"Image Processing Error: {str(e)}")
-        st.session_state.debug_info.append(traceback.format_exc())
         return None, None, f"Error processing image: {str(e)}"
+
+# Function to generate post content with improved error handling
+def generate_post(prompt, platform, image_bytes=None, is_refinement=False, original_content=None):
+    try:
+        # Always use Gemini 1.5 Pro
+        model = genai.GenerativeModel(DEFAULT_MODEL)
+        
+        # Prepare text-only prompt
+        full_prompt = (
+            f"Create a short, engaging {platform} post (less than 50 words) based on this prompt: '{prompt}'. "
+            f"Include relevant hashtags. Be creative and professional."
+        )
+        
+        if is_refinement and original_content:
+            full_prompt = (
+                f"Create a COMPLETELY DIFFERENT version of a {platform} post based on this prompt: '{prompt}'. "
+                f"The previous post was: '{original_content}' - "
+                f"I need a new approach with different tone, structure, and perspective. "
+                f"Make it sound nothing like the original while still addressing the core topic. "
+                f"Keep it under 50 words and include relevant hashtags."
+            )
+        
+        # Handle image if provided
+        if image_bytes:
+            image_parts = [{"mime_type": "image/png", "data": base64.b64encode(image_bytes).decode("utf-8")}]
+            text_parts = [full_prompt]
+            
+            response = model.generate_content(
+                image_parts + text_parts
+            )
+            full_prompt = (
+                f"Create a short, engaging {platform} post (less than 50 words) based on this prompt: '{prompt}' "
+                f"and the image I've provided. The post should reference what's in the image. "
+                f"Include relevant hashtags. Be creative and professional."
+            )
+            if is_refinement and original_content:
+                full_prompt = (
+                    f"Create a COMPLETELY DIFFERENT version of a {platform} post based on this prompt: '{prompt}' "
+                    f"and the image I've provided. The post should reference what's in the image. "
+                    f"The previous post was: '{original_content}' - "
+                    f"I need a new approach with different tone, structure, and perspective. "
+                    f"Make it sound nothing like the original while still addressing the core topic and referencing the image. "
+                    f"Keep it under 50 words and include relevant hashtags."
+                )
+            
+            response = model.generate_content(
+                [
+                    {"mime_type": "image/png", "data": base64.b64encode(image_bytes).decode("utf-8")},
+                    full_prompt
+                ]
+            )
+        else:
+            response = model.generate_content(full_prompt)
+            
+        generated_text = response.text
+        
+        # Check for inappropriate content
+        if contains_inappropriate_content(generated_text):
+            return "I couldn't generate appropriate content based on your prompt. Please try a different topic or wording."
+        
+        return generated_text
+    
+    except Exception as e:
+        error_msg = str(e)
+        troubleshooting = "\n\nTroubleshooting tips:\n"
+        
+        if "404" in error_msg and "not found" in error_msg:
+            troubleshooting += "1. The model name is not recognized. Try checking if you have access to Gemini 1.5 Pro.\n"
+        elif "403" in error_msg:
+            troubleshooting += "1. Your API key might not have permission to use Gemini 1.5 Pro.\n"
+        elif "image" in error_msg.lower():
+            troubleshooting += "1. There might be an issue with image processing. Try with a different image or without an image.\n"
+        else:
+            troubleshooting += "1. Check your API key permissions.\n"
+            
+        troubleshooting += "2. Make sure you have access to Gemini models.\n"
+        troubleshooting += "3. Try updating the google-generativeai package: pip install --upgrade google-generativeai"
+        
+        return f"Error generating content: {error_msg}{troubleshooting}"
 
 # Main interface
 st.subheader("Step 1: Configure Your Post")
@@ -401,165 +215,128 @@ platform = st.selectbox(
 # User prompt input
 prompt = st.text_area("Enter your post topic or idea", height=100)
 
-# Generate button
-col1, col2 = st.columns([1, 3])
-with col1:
-    generate_button = st.button("Generate Content Package")
+# Image options
+image_option = st.radio(
+    "Image options:",
+    ["No image", "Upload your own image", "Generate an image with AI"]
+)
 
-if generate_button and prompt:
-    if not gemini_api_key:
-        st.error("❌ Please enter your Gemini API Key in the sidebar first.")
-    else:
-        # Store prompt in history
-        if prompt not in st.session_state.prompt_history:
-            st.session_state.prompt_history.append(prompt)
-        
-        # Clear previous session state for content
-        st.session_state.agent_conversation = []
-        st.session_state.generated_post = ""
-        st.session_state.generated_image_prompt = ""
-        st.session_state.generated_image_url = None
-        st.session_state.image_analysis = None
-        st.session_state.final_post = ""
-        st.session_state.debug_info = []
-        
-        st.session_state.debug_info.append(f"Starting generation with prompt: {prompt}")
-        
-        # Show progress
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        try:
-            # Step 1: Initialize agents
-            status_text.text("Initializing agents...")
-            progress_bar.progress(10)
-            
-            text_agent = TextGenerationAgent()
-            image_agent = ImageGenerationAgent()
-            collaboration_agent = CollaborationAgent()
-            
-            # Record user prompt
-            message = {"agent": "User", "message": f"Request: {prompt}", "time": get_timestamp()}
-            st.session_state.agent_conversation.append(message)
-            
-            # Step 2: Generate initial post with text agent
-            status_text.text("Generating initial post...")
-            progress_bar.progress(20)
-            
-            st.session_state.generated_post = text_agent.generate_initial_post(prompt, platform)
-            
-            if not st.session_state.generated_post.startswith("Error"):
-                # Step 3: Extract visual elements from the post
-                status_text.text("Extracting visual elements...")
-                progress_bar.progress(30)
+uploaded_file = None
+display_image = None
+image_bytes = None
+image_prompt = ""
+
+if image_option == "Upload your own image":
+    uploaded_file = st.file_uploader("Upload an image to include with your post", type=["png", "jpg", "jpeg"])
+    if uploaded_file is not None:
+        display_image, image_bytes = process_image(uploaded_file)
+        if display_image:
+            st.image(display_image, caption="Preview of uploaded image", use_container_width=True)
+elif image_option == "Generate an image with AI":
+    image_prompt = st.text_area("Describe the image you want to generate", 
+                               placeholder="E.g., A professional workspace with a laptop, coffee cup, and notebook")
+    if st.button("Preview Image") and image_prompt:
+        with st.spinner("Generating image preview..."):
+            image_url, error = generate_image_with_pollinations(image_prompt)
+            if image_url:
+                st.session_state.generated_image_url = image_url
                 
-                visual_elements = text_agent.extract_visual_elements(st.session_state.generated_post)
+                # Add a delay to allow image to be generated
+                time.sleep(2)
                 
-                # Step 4: Create enhanced image prompt
-                status_text.text("Creating image prompt...")
-                progress_bar.progress(40)
-                
-                st.session_state.generated_image_prompt = text_agent.create_image_prompt(prompt, visual_elements)
-                
-                # Step 5: Generate image with the image agent
-                status_text.text("Generating image...")
-                progress_bar.progress(50)
-                
-                image_url, error = image_agent.generate_image(st.session_state.generated_image_prompt)
+                try:
+                    # Download and display the image
+                    response = requests.get(image_url)
+                    if response.status_code == 200:
+                        # Save the image bytes
+                        image_bytes = response.content
+                        
+                        # Display the image
+                        st.image(image_url, caption="Generated image preview", use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error downloading image: {str(e)}")
+                    st.warning("Showing image URL instead. Click to view:")
+                    st.markdown(f"[View generated image]({image_url})")
+            else:
+                st.error(f"Failed to generate image: {error}")
+
+# Generate button
+if st.button("Generate Post") and prompt:
+    with st.spinner("Generating your social media post..."):
+        # First, generate an image if that option was selected but not previewed
+        if image_option == "Generate an image with AI" and image_prompt and not st.session_state.generated_image_url:
+            with st.spinner("Generating image..."):
+                image_url, error = generate_image_with_pollinations(image_prompt)
                 if image_url:
                     st.session_state.generated_image_url = image_url
+                    # Add a delay to allow image to be generated
+                    time.sleep(2)
                     
-                    # Step 6: Analyze the generated image
-                    status_text.text("Analyzing the image...")
-                    progress_bar.progress(60)
-                    
-                    st.session_state.image_analysis = image_agent.analyze_generated_image(image_url, text_agent)
-                    
-                    # Step 7: Refine the post based on image analysis
-                    status_text.text("Refining the post...")
-                    progress_bar.progress(70)
-                    
-                    refined_post = text_agent.refine_post_with_image_feedback(
-                        st.session_state.generated_post,
-                        st.session_state.image_analysis,
-                        platform
-                    )
-                    
-                    # Step 8: Collaborative agent finalizes the content package
-                    status_text.text("Finalizing content package...")
-                    progress_bar.progress(90)
-                    
-                    recommendation, final_post = collaboration_agent.finalize_content(
-                        prompt,
-                        refined_post,
-                        st.session_state.generated_image_prompt,
-                        st.session_state.image_analysis
-                    )
-                    
-                    st.session_state.final_post = final_post
-                    
-                    # Complete
-                    status_text.text("Content package generated successfully!")
-                    progress_bar.progress(100)
+                    try:
+                        # Download and use the image
+                        response = requests.get(image_url)
+                        if response.status_code == 200:
+                            image_bytes = response.content
+                    except Exception as e:
+                        st.error(f"Error downloading image: {str(e)}")
                 else:
-                    status_text.text("Failed to generate image.")
                     st.error(f"Failed to generate image: {error}")
-                    progress_bar.progress(100)
-            else:
-                status_text.text("Failed to generate initial post.")
-                st.error(st.session_state.generated_post)
-                progress_bar.progress(100)
-                
-        except Exception as e:
-            st.error(f"An error occurred during content generation: {str(e)}")
-            st.session_state.debug_info.append(f"Main Process Error: {str(e)}")
-            st.session_state.debug_info.append(traceback.format_exc())
-            progress_bar.progress(100)
-            status_text.text("Generation failed. Check debug info for details.")
+        
+        # Then generate the post
+        if prompt in st.session_state.prompt_history:
+            st.session_state.generated_post = generate_post(prompt, platform, image_bytes, is_refinement=True)
+        else:
+            st.session_state.prompt_history.append(prompt)
+            st.session_state.generated_post = generate_post(prompt, platform, image_bytes)
+            # Store the original post for comparison during improvement
+            st.session_state.original_post = st.session_state.generated_post
+        
+        st.session_state.feedback_provided = False
 
 # Display generated content
-if st.session_state.final_post:
-    st.subheader("Generated Content Package:")
-    
-    # Display image and text together
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        if st.session_state.generated_image_url:
-            try:
-                st.image(st.session_state.generated_image_url, caption="Generated image", use_container_width=True)
-            except Exception as e:
-                st.error(f"Error displaying image: {str(e)}")
-                st.session_state.debug_info.append(f"Image Display Error: {str(e)}")
-    
-    with col2:
-        st.markdown("#### Final Post Text:")
-        st.write(st.session_state.final_post)
-    
-    # Copy button for the final post
-    if st.button("Copy to Clipboard"):
-        st.code(st.session_state.final_post)
-        st.success("Post copied to clipboard! (Use Ctrl+C or Cmd+C to copy from the code block)")
-
-    # Toggle to view agent conversation
-    if st.checkbox("Show Agent Conversation", value=st.session_state.show_agent_convo):
-        st.session_state.show_agent_convo = True
-        st.subheader("Agent Collaboration Process:")
+if st.session_state.generated_post:
+    st.subheader("Generated Post:")
+    if st.session_state.generated_post.startswith("Error"):
+        st.error(st.session_state.generated_post)
+    else:
+        # Show the final result with text and image if applicable
+        if image_option != "No image":
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                if display_image:
+                    st.image(display_image, caption="Post image", use_container_width=True)
+                elif st.session_state.generated_image_url:
+                    st.image(st.session_state.generated_image_url, caption="Generated image", use_container_width=True)
+            with col2:
+                st.markdown("#### Post Text:")
+                st.write(st.session_state.generated_post)
+        else:
+            st.write(st.session_state.generated_post)
         
-        for message in st.session_state.agent_conversation:
-            with st.expander(f"[{message['time']}] {message['agent']}"):
-                st.write(message['message'])
-    else:
-        st.session_state.show_agent_convo = False
+        # Feedback buttons
+        if not st.session_state.feedback_provided:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("It's Good"):
+                    st.session_state.feedback_provided = True
+                    st.success("Great! Your post is ready to use.")
+            with col2:
+                if st.button("Improve It"):
+                    with st.spinner("Generating significantly different version..."):
+                        # Pass the original post to ensure the new one is different
+                        st.session_state.generated_post = generate_post(
+                            prompt, 
+                            platform, 
+                            image_bytes, 
+                            is_refinement=True, 
+                            original_content=st.session_state.generated_post
+                        )
 
-# Debug information section - very useful for troubleshooting
-with st.expander("Debug Information", expanded=False):
-    st.subheader("Debug Log")
-    if st.session_state.debug_info:
-        for i, debug_msg in enumerate(st.session_state.debug_info):
-            st.text(f"{i+1}. {debug_msg}")
-    else:
-        st.text("No debug information available.")
+# Copy button for the generated post
+if st.session_state.generated_post and not st.session_state.generated_post.startswith("Error"):
+    if st.button("Copy to Clipboard"):
+        st.code(st.session_state.generated_post)
+        st.success("Post copied to clipboard! (Use Ctrl+C or Cmd+C to copy from the code block)")
 
 # History section in sidebar
 st.sidebar.subheader("Previous Prompts")
@@ -571,27 +348,29 @@ else:
 
 # Instructions and information in sidebar
 st.sidebar.markdown("---")
-st.sidebar.subheader("How Multi-Agent System Works")
+st.sidebar.subheader("How to use")
 st.sidebar.markdown("""
-1. **Text Agent** generates initial post
-2. **Text Agent** extracts visual elements
-3. **Text Agent** creates image prompt
-4. **Image Agent** generates image
-5. **Image Agent** analyzes image
-6. **Text Agent** refines post based on image
-7. **Collaboration Agent** finalizes content
+1. Enter your Gemini API Key
+2. Select a platform (LinkedIn or Twitter/X)
+3. Type your post topic/idea 
+4. Choose an image option:
+   - No image
+   - Upload your own image
+   - Generate an AI image
+5. Click 'Generate Post'
+6. Provide feedback to refine
 """)
 
 st.sidebar.markdown("---")
-st.sidebar.info("This app uses Google's Gemini 1.5 Pro API for text generation and reasoning, " 
-                "and Pollinations.ai for image generation. The agents work together to create a cohesive content package.")
+st.sidebar.info("This app uses Google's Gemini 1.5 Pro API to generate social media content and " 
+                "Pollinations.ai for image generation. Your content is checked for appropriateness before displaying.")
 
-# Version indicator
+# Version indicator to confirm updates are working
 st.sidebar.markdown("---")
-st.sidebar.text("App Version: 3.1 (Multi-Agent System + Debug)")
+st.sidebar.text("App Version: 2.1 (Fixed image generation)")
 
 # Troubleshooting tips
-with st.sidebar.expander("Troubleshooting Tips", expanded=True):
+with st.sidebar.expander("Troubleshooting Tips", expanded=False):
     st.markdown("""
     **If you're getting API errors:**
     
@@ -602,16 +381,13 @@ with st.sidebar.expander("Troubleshooting Tips", expanded=True):
        pip install --upgrade google-generativeai
        ```
     4. Ensure you have an active internet connection
-    5. Check the Debug Information section for detailed error logs
+    5. If using images, make sure they're in a supported format (PNG, JPG, JPEG)
+    6. If image generation fails, try a more descriptive prompt or simplify your request
+    7. If image display fails, you can click the provided link to view the image directly
     """)
 
 # Add a clear cache button to help with updates
 if st.sidebar.button("Clear Cache and Reload"):
-    try:
-        st.cache_data.clear()
-    except:
-        # For older versions of Streamlit
-        st.experimental_memo.clear()
-        st.experimental_singleton.clear()
+    st.cache_data.clear()
     st.session_state.clear()
     st.rerun()
